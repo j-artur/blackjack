@@ -11,6 +11,7 @@ use termion::{
     color::{Blue, Fg, Green, LightBlue, Red, Reset, White, Yellow},
     cursor::{self, HideCursor},
     raw::{IntoRawMode, RawTerminal},
+    screen::{ToAlternateScreen, ToMainScreen},
     style::{self, Bold},
 };
 
@@ -236,10 +237,10 @@ pub struct Game {
 
 impl Game {
     pub fn new() -> Game {
+        let mut terminal = HideCursor::from(stdout().into_raw_mode().unwrap());
+        write!(terminal, "{}", ToAlternateScreen).unwrap();
         Game {
-            terminal: Terminal {
-                terminal: HideCursor::from(stdout().into_raw_mode().unwrap()),
-            },
+            terminal: Terminal { terminal },
             deck: pack(),
             state: Starting(First),
             player: Hand::new(),
@@ -290,9 +291,9 @@ impl Game {
                     }
                     (Continue, Surrender) => GameOver(Lose),
 
-                    (Up, Hit) => Selecting(Stand),
-                    (Up, Stand) => Selecting(Surrender),
-                    (Up, Surrender) => Selecting(Hit),
+                    (Up, Hit) => Selecting(Surrender),
+                    (Up, Stand) => Selecting(Hit),
+                    (Up, Surrender) => Selecting(Stand),
 
                     (Down, Hit) => Selecting(Stand),
                     (Down, Stand) => Selecting(Surrender),
@@ -342,7 +343,18 @@ impl Game {
 
         match &self.state {
             Selecting(c) => {
-                let select = |it: Choice| format!("{} {}", if it == *c { '>' } else { ' ' }, it);
+                let select = |it: Choice| {
+                    format!(
+                        "{} {}{}",
+                        if it == *c {
+                            String::from(LightBlue.fg_str()) + ">"
+                        } else {
+                            "-".to_string()
+                        },
+                        it,
+                        Fg(Reset)
+                    )
+                };
                 self.terminal.println(select(Hit));
                 self.terminal.println(select(Stand));
                 self.terminal.println(select(Surrender));
@@ -389,6 +401,7 @@ impl Game {
 impl Drop for Game {
     fn drop(&mut self) {
         self.terminal.clear();
+        write!(self.terminal.terminal, "{}", ToMainScreen).unwrap();
         self.terminal.terminal.flush().unwrap();
     }
 }
